@@ -85,3 +85,78 @@ export function emptyMetrics(): AtlasMetrics {
   const zero: MetricPair = { current: 0, previous: 0, pctChange: 0 };
   return { traces: zero, spans: zero, gateDecisions: zero, agentScans: zero };
 }
+
+// --- Chart & tabel data voor default dashboard (A2) ---
+
+export interface DailyTracePoint {
+  date: string;
+  count: number;
+}
+
+export interface RecentTraceRow {
+  id: string;
+  name: string;
+  timestamp: string;
+  latency: number;
+  status: "OK" | "Error";
+}
+
+export async function getTracesPerDay90d(): Promise<DailyTracePoint[]> {
+  if (!PK || !SK) throw new Error("Langfuse keys ontbreken in env");
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+  const from = new Date(now - 89 * day).toISOString();
+  const to = new Date(now).toISOString();
+  const days = await fetchDaily(from, to);
+  const byDate = new Map<string, number>(days.map((d) => [d.date.slice(0, 10), d.countTraces]));
+  const out: DailyTracePoint[] = [];
+  for (let i = 89; i >= 0; i--) {
+    const key = new Date(now - i * day).toISOString().slice(0, 10);
+    out.push({ date: key, count: byDate.get(key) ?? 0 });
+  }
+  return out;
+}
+
+interface RawTrace {
+  id: string;
+  name: string | null;
+  timestamp: string;
+  latency: number | null;
+  output: unknown;
+}
+
+function extractStatus(output: unknown): "OK" | "Error" {
+  if (!output || typeof output !== "object") return "OK";
+  const o = output as Record<string, unknown>;
+  if (o.error) return "Error";
+  const result = o.result;
+  if (result && typeof result === "object" && (result as Record<string, unknown>).error) return "Error";
+  return "OK";
+}
+
+export async function getRecentTraces(limit = 10): Promise<RecentTraceRow[]> {
+  if (!PK || !SK) throw new Error("Langfuse keys ontbreken in env");
+  const url = new URL(`${HOST}/api/public/traces`);
+  url.searchParams.set("limit", String(limit));
+  url.searchParams.set("orderBy", "timestamp.desc");
+  const res = await fetch(url.toString(), { headers: { Authorization: auth() }, cache: "no-store" });
+  if (!res.ok) throw new Error(`Langfuse recent traces ${res.status}`);
+  const json = await res.json();
+  const rows: RawTrace[] = json.data || [];
+  return rows.map(
+    (t): RecentTraceRow => ({
+      id: t.id,
+      name: t.name ?? "(unnamed)",
+      timestamp: t.timestamp,
+      latency: t.latency ?? 0,
+      status: extractStatus(t.output),
+    }),
+  );
+}
+
+export function emptyDailyTraces(): DailyTracePoint[] {
+  return [];
+}
+export function emptyRecentTraces(): RecentTraceRow[] {
+  return [];
+}
