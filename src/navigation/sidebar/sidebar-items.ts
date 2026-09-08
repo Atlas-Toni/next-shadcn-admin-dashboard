@@ -52,10 +52,8 @@ export const sidebarItems: NavGroup[] = [
       {
         id: "proposals",
         title: "Proposals",
-        url: "/dashboard/coming-soon",
+        url: "/dashboard/proposals",
         icon: Inbox,
-        badge: "soon",
-        disabled: true,
       },
       {
         id: "agents",
