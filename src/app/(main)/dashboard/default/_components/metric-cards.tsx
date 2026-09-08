@@ -2,7 +2,7 @@ import { Activity, Boxes, ShieldCheck, TrendingDown, TrendingUp, Waypoints } fro
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import type { AtlasMetrics, MetricPair } from "@/lib/langfuse";
+import type { AtlasMetrics, MetricPair } from "@/lib/logfire";
 
 interface MetricCardProps {
   label: string;

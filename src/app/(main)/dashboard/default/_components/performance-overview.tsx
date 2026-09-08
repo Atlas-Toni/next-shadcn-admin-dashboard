@@ -5,7 +5,7 @@ import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import type { DailyTracePoint } from "@/lib/langfuse";
+import type { DailyTracePoint } from "@/lib/logfire";
 
 const chartConfig = {
   count: {
@@ -23,7 +23,7 @@ export function PerformanceOverview({ data }: Props) {
     <Card>
       <CardHeader>
         <CardTitle>Traces per day</CardTitle>
-        <CardDescription>Laatste 90 dagen — Langfuse</CardDescription>
+        <CardDescription>Laatste 90 dagen — Logfire</CardDescription>
       </CardHeader>
       <CardContent>
         {data.length === 0 ? (
