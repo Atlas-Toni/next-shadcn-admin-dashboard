@@ -15,9 +15,10 @@ export interface Proposal {
   description: string;
   action_summary: string;
   payload: Record<string, unknown>;
-  status: "pending" | "approved" | "rejected" | "done";
+  status: "pending" | "approved" | "rejected" | "done" | "expired";
   created_at: string;
   resolved_at?: string;
+  unrejected_at?: string;
   result?: Record<string, unknown>;
 }
 
@@ -27,6 +28,12 @@ export interface ProposalsSnapshot {
   agents: string[];
   connected: boolean;
   error?: string;
+}
+
+export interface BulkRejectResult {
+  rejected: number;
+  agent: string;
+  ids: string[];
 }
 
 async function safeFetch<T>(path: string, fallback: T): Promise<T | null> {
@@ -62,4 +69,47 @@ export async function getProposalsSnapshot(): Promise<ProposalsSnapshot> {
     agents: health.agents,
     connected: true,
   };
+}
+
+/**
+ * Groepeer pending proposals per agent, alfabetisch op agent-naam.
+ * Puur presentation-logic; gescheiden zodat de UI-component zelf dom blijft.
+ */
+export function groupByAgent(proposals: Proposal[]): Array<{ agent: string; items: Proposal[] }> {
+  const map = new Map<string, Proposal[]>();
+  for (const p of proposals) {
+    const existing = map.get(p.agent);
+    if (existing) {
+      existing.push(p);
+    } else {
+      map.set(p.agent, [p]);
+    }
+  }
+  return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([agent, items]) => ({ agent, items }));
+}
+
+/**
+ * Client-side helpers voor de review-actions. Lopen via de Next.js
+ * API-proxies (/api/proposals/...) zodat de browser nooit rechtstreeks
+ * met 127.0.0.1:8787 praat — zelfde patroon als ProposalCard.
+ */
+
+export async function unrejectProposal(id: string): Promise<Proposal> {
+  const res = await fetch(`/api/proposals/${id}/unreject`, { method: "POST" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? body.detail ?? `HTTP ${res.status}`);
+  }
+  return (await res.json()) as Proposal;
+}
+
+export async function bulkRejectAgent(agent: string): Promise<BulkRejectResult> {
+  const res = await fetch(`/api/proposals/bulk-reject?agent=${encodeURIComponent(agent)}`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? body.detail ?? `HTTP ${res.status}`);
+  }
+  return (await res.json()) as BulkRejectResult;
 }
