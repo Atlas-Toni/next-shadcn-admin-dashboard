@@ -1,22 +1,17 @@
 import { AlertCircle, Inbox } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getProposalsSnapshot } from "@/lib/proposals";
+import { Card, CardContent } from "@/components/ui/card";
+import { getProposalsSnapshot, groupByAgent } from "@/lib/proposals";
 
+import { AgentGroupHeader } from "./_components/agent-group-header";
+import { HistoryRow } from "./_components/history-row";
 import { ProposalCard } from "./_components/proposal-card";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_COLOR: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-  done: "default",
-  approved: "default",
-  rejected: "outline",
-  pending: "secondary",
-};
-
 export default async function ProposalsPage() {
   const { pending, history, agents, connected, error } = await getProposalsSnapshot();
+  const grouped = groupByAgent(pending);
 
   return (
     <div className="@container/main flex flex-col gap-6 p-4 md:p-6">
@@ -54,9 +49,16 @@ export default async function ProposalsPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {pending.map((p) => (
-              <ProposalCard key={p.id} proposal={p} />
+          <div className="space-y-6">
+            {grouped.map(({ agent, items }) => (
+              <div key={agent} className="space-y-3">
+                <AgentGroupHeader agent={agent} count={items.length} />
+                <div className="grid gap-4 md:grid-cols-2">
+                  {items.map((p) => (
+                    <ProposalCard key={p.id} proposal={p} />
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -71,17 +73,7 @@ export default async function ProposalsPage() {
         ) : (
           <div className="space-y-2">
             {history.map((h) => (
-              <Card key={h.id}>
-                <CardContent className="flex items-center justify-between gap-4 py-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{h.title}</p>
-                    <p className="text-muted-foreground text-xs">
-                      {h.agent} · {h.resolved_at ? new Date(h.resolved_at).toLocaleString("nl-NL") : "?"}
-                    </p>
-                  </div>
-                  <Badge variant={STATUS_COLOR[h.status] ?? "secondary"}>{h.status}</Badge>
-                </CardContent>
-              </Card>
+              <HistoryRow key={h.id} item={h} />
             ))}
           </div>
         )}
