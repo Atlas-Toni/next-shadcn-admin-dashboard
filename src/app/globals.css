@@ -9,6 +9,7 @@
 @import "../styles/presets/terminal.css";
 @import "../styles/presets/grid.css";
 @import "../styles/presets/ocean.css";
+@import "../styles/ambient.css";
 
 @custom-variant dark (&:is(.dark *));
 
