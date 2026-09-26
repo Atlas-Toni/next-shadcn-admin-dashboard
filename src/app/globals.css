@@ -7,6 +7,8 @@
 @import "../styles/presets/soft-pop.css";
 @import "../styles/presets/tangerine.css";
 @import "../styles/presets/terminal.css";
+@import "../styles/presets/grid.css";
+@import "../styles/presets/ocean.css";
 
 @custom-variant dark (&:is(.dark *));
 

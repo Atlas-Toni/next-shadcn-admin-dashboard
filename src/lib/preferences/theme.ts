@@ -28,6 +28,22 @@ export const THEME_PRESET_OPTIONS = [
     },
   },
   {
+    label: "Grid (Tron)",
+    value: "grid",
+    primary: {
+      light: "oklch(0.75 0.18 195)",
+      dark: "oklch(0.75 0.18 195)",
+    },
+  },
+  {
+    label: "Ocean Blue",
+    value: "ocean",
+    primary: {
+      light: "#5B9BD5",
+      dark: "#5B9BD5",
+    },
+  },
+  {
     label: "Soft Pop",
     value: "soft-pop",
     primary: {

@@ -55,14 +55,14 @@ function defineSSRPreference<
 export const PREFERENCE_REGISTRY = {
   theme_mode: definePreference({
     values: THEME_MODE_VALUES,
-    defaultValue: "light",
+    defaultValue: "dark",
     persistence: "client-cookie",
     attribute: "data-theme-mode",
   }),
 
   theme_preset: definePreference({
     values: THEME_PRESET_VALUES,
-    defaultValue: "default",
+    defaultValue: "ocean",
     persistence: "client-cookie",
     attribute: "data-theme-preset",
   }),
