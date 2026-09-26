@@ -11,6 +11,7 @@ import { AutoRefresh } from "./auto-refresh";
 import { LiveClock } from "./live-clock";
 import s from "./ocean-bento.module.css";
 import { DemoCleanup, ProposalActions } from "./proposal-actions";
+import { PuroLiveLines, PuroStatusCard } from "./puro-live";
 
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-atlas-mono" });
 
@@ -192,10 +193,6 @@ export function OceanBento({ metrics, daily, traces, today, snapshot }: Props) {
 
   const tableRows = traces.slice(0, 5);
 
-  // Puro-status: statuskanaal volgt in stap 2, tot die tijd IDLE
-  const puro = "IDLE";
-  const beamFast = false;
-
   return (
     <div className={`${s.root} ${GeistSans.variable} ${mono.variable} notranslate`} translate="no" lang="nl">
       <AutoRefresh seconds={15} />
@@ -325,7 +322,7 @@ export function OceanBento({ metrics, daily, traces, today, snapshot }: Props) {
               puro — live ai terminal
             </span>
             <span className={`${s.mono} ${s.dim}`} style={{ fontSize: 11 }}>
-              bron: logfire · live-koppeling volgt
+              bron: logfire + puro live
             </span>
             <span className={`${s.mono} ${s.dim} ${s.xs}`} style={{ marginLeft: "auto" }}>
               {traces.length} sporen
@@ -349,6 +346,7 @@ export function OceanBento({ metrics, daily, traces, today, snapshot }: Props) {
                 </div>
               ))
             )}
+            <PuroLiveLines />
             <div className={s.termLine}>
               <span className={s.ln}>›</span>
               <span className={s.accent}>puro@atlas</span>
@@ -358,23 +356,8 @@ export function OceanBento({ metrics, daily, traces, today, snapshot }: Props) {
           </div>
         </section>
 
-        {/* Puro-status met Border Beam */}
-        <section
-          className={`${s.cell} ${s.pad} ${s.beam} ${beamFast ? s.beamFast : ""}`}
-          style={area("10 / 13", "1 / 2")}
-        >
-          <div className={s.row}>
-            <span className={s.lbl}>puro · status</span>
-            <span className={`${s.mono} ${s.dim} ${s.xs}`}>hey_puro · 0.20</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span className={s.dot} />
-            <span className={`${s.mono} ${s.dim}`} style={{ fontSize: 22, fontWeight: 500, letterSpacing: "0.1em" }}>
-              {puro}
-            </span>
-          </div>
-          <span className={`${s.mono} ${s.dim} ${s.xs}`}>groq → llama3.2:3b</span>
-        </section>
+        {/* Puro-status (live) */}
+        <PuroStatusCard />
 
         {/* Poortbeslissingen */}
         <section className={`${s.cell} ${s.pad}`} style={area("10 / 12", "2 / 3")}>
