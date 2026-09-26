@@ -233,3 +233,21 @@ export async function getRecentTraces(limit = 10): Promise<RecentTraceRow[]> {
 export function emptyRecentTraces(): RecentTraceRow[] {
   return [];
 }
+
+// --- Vandaag: aantallen per span-naam sinds middernacht (lokale tijd) ---
+
+export async function getTodaySpanCounts(): Promise<Record<string, number>> {
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  const from = midnight.toISOString();
+  const sql = `
+    SELECT span_name, COUNT(*) AS n
+    FROM records
+    WHERE start_timestamp >= '${from}'
+    GROUP BY span_name
+  `;
+  const rows = await runQuery<{ span_name: string; n: number | string }>(sql, from);
+  const out: Record<string, number> = {};
+  for (const r of rows) out[r.span_name || "(unnamed)"] = Number(r.n) || 0;
+  return out;
+}

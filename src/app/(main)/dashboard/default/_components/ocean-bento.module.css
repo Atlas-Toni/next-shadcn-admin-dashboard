@@ -205,3 +205,43 @@
 
 /* fix: lange lijsten scrollen i.p.v. afsnijden */
 .padList { overflow-y: auto; }
+
+/* v2: knoppen, scrollende lijsten, Vandaag-kaart */
+.list { flex-grow: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.btnYes,
+.btnNo {
+  font-family: var(--font-atlas-mono), ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  min-width: 44px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+.btnYes { color: #5b9bd5; border: 1px solid #5b9bd5; }
+.btnYes:hover:not(:disabled) { background: #5b9bd5; color: #05101e; }
+.btnNo { color: #9fb6d1; border: 1px solid #134074; }
+.btnNo:hover:not(:disabled) { border-color: #e5534b; color: #f2a09b; }
+.btnYes:disabled,
+.btnNo:disabled { opacity: 0.5; cursor: default; }
+.btnLink {
+  font-family: var(--font-atlas-mono), ui-monospace, monospace;
+  font-size: 10.5px;
+  color: #5b9bd5;
+  background: transparent;
+  border: 1px solid #134074;
+  border-radius: 3px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.btnLink:hover:not(:disabled) { border-color: #5b9bd5; }
+.err { font-family: var(--font-atlas-mono), ui-monospace, monospace; font-size: 10.5px; color: #f2a09b; }
+.todayLine { display: flex; align-items: baseline; gap: 8px; }
+.todayNum { font-size: 20px; font-weight: 500; line-height: 1.1; min-width: 40px; }
+.planned { color: #7f9bbe; }
+
+/* v2.1 compact: Vandaag-kaart past volledig */
+.todayNum { font-size: 17px; line-height: 1.15; min-width: 36px; }

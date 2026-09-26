@@ -10,6 +10,7 @@ import type { Proposal, ProposalsSnapshot } from "@/lib/proposals";
 import { AutoRefresh } from "./auto-refresh";
 import { LiveClock } from "./live-clock";
 import s from "./ocean-bento.module.css";
+import { DemoCleanup, ProposalActions } from "./proposal-actions";
 
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-atlas-mono" });
 
@@ -28,6 +29,8 @@ function fmtDur(ns: number): string {
 }
 const timeOf = (iso: string) =>
   new Date(iso).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: TZ });
+const shortTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
 const stampOf = (iso: string) =>
   new Date(iso).toLocaleString("nl-NL", {
     day: "2-digit",
@@ -37,31 +40,56 @@ const stampOf = (iso: string) =>
     second: "2-digit",
     timeZone: TZ,
   });
+const isToday = (iso?: string) => {
+  if (!iso) return false;
+  const d = new Date(iso);
+  const now = new Date();
+  return d.toDateString() === now.toDateString();
+};
 
 const VOICE_RE = /puro|voice|transcribe|wake|tts|stt/i;
-
-function verdict(p: Proposal): { text: string; color: string } {
-  switch (p.status) {
-    case "pending":
-      return { text: "open", color: "#5B9BD5" };
-    case "approved":
-    case "done":
-      return { text: "ja", color: "#DCEAF7" };
-    case "rejected":
-      return { text: "nee", color: "#7F9BBE" };
-    default:
-      return { text: "verlopen", color: "#7F9BBE" };
-  }
-}
+const DEMO_RE = /^\s*demo\b/i;
+/** Agents die nog placeholder zijn: grijs "gepland". */
+const PLANNED = new Set(["content", "scout", "web_builder"]);
+/** Geschrapt (23 sept): niet tonen. */
+const HIDDEN = new Set(["kids"]);
 
 interface Props {
   metrics: AtlasMetrics;
   daily: DailyTracePoint[];
   traces: RecentTraceRow[];
+  today: Record<string, number>;
   snapshot: ProposalsSnapshot;
 }
 
-export function OceanBento({ metrics, daily, traces, snapshot }: Props) {
+interface TraceGroup {
+  name: string;
+  err: boolean;
+  first: RecentTraceRow;
+  last: RecentTraceRow;
+  count: number;
+}
+
+interface TermLine {
+  key: string;
+  at: number;
+  iso: string;
+  tag: string;
+  msg: string;
+  tagColor: string;
+  msgColor: string;
+}
+
+const shortStamp = (iso: string) =>
+  new Date(iso).toLocaleString("nl-NL", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: TZ,
+  });
+
+export function OceanBento({ metrics, daily, traces, today, snapshot }: Props) {
   const connected = snapshot.connected;
 
   // Sporen: laatste 30 dagen als staafjes
@@ -74,23 +102,94 @@ export function OceanBento({ metrics, daily, traces, snapshot }: Props) {
     title: `${d.date}: ${d.count}`,
   }));
 
-  // Terminal: oudste boven, nieuwste onder
-  const lines = [...traces].reverse().map((t, i) => ({
-    key: `${t.id}-${t.timestamp}-${i}`,
-    n: i + 1,
-    ts: timeOf(t.timestamp),
-    tag: `[${t.name}]`,
-    msg: [fmtDur(t.latency), `trace ${t.id.slice(0, 12)}…`].filter(Boolean).join(" · "),
-    voice: VOICE_RE.test(t.name),
-    err: t.status === "Error",
-  }));
+  // Terminal: herhalingen samenvouwen, oudste boven, nieuwste onder
+  const groups: TraceGroup[] = [];
+  for (const t of [...traces].reverse()) {
+    const err = t.status === "Error";
+    const g = groups[groups.length - 1];
+    if (g && g.name === t.name && g.err === err) {
+      g.count += 1;
+      g.last = t;
+    } else {
+      groups.push({ name: t.name, err, first: t, last: t, count: 1 });
+    }
+  }
+  const traceLines: TermLine[] = groups.map((g, i) => {
+    const voice = VOICE_RE.test(g.name);
+    return {
+      key: `t-${g.last.id}-${g.last.timestamp}-${i}`,
+      at: new Date(g.last.timestamp).getTime(),
+      iso: g.last.timestamp,
+      tag: `[${g.name}]`,
+      msg:
+        g.count > 1
+          ? `×${g.count} · ${shortTime(g.first.timestamp)} → ${shortTime(g.last.timestamp)}${g.err ? " · fouten" : " · niets bijzonders"}`
+          : [fmtDur(g.last.latency), `trace ${g.last.id.slice(0, 12)}…`].filter(Boolean).join(" · "),
+      tagColor: g.err ? "#E5534B" : voice ? "#5B9BD5" : "#6E8BAD",
+      msgColor: g.err ? "#F2A09B" : voice ? "#DCEAF7" : "#A9BFD8",
+    };
+  });
 
-  // Agents: naam uit /health, open voorstellen per agent
+  // Echte gebeurtenissen uit de voorstellen: nieuw voorstel + jouw JA/NEE
+  const eventLines: TermLine[] = [];
+  for (const p of [...snapshot.pending, ...snapshot.history]) {
+    if (p.created_at) {
+      eventLines.push({
+        key: `c-${p.id}`,
+        at: new Date(p.created_at).getTime(),
+        iso: p.created_at,
+        tag: `[${p.agent}]`,
+        msg: `nieuw voorstel: ${p.title}`,
+        tagColor: "#5B9BD5",
+        msgColor: "#DCEAF7",
+      });
+    }
+    if (p.resolved_at && (p.status === "approved" || p.status === "done" || p.status === "rejected")) {
+      const yes = p.status !== "rejected";
+      eventLines.push({
+        key: `r-${p.id}`,
+        at: new Date(p.resolved_at).getTime(),
+        iso: p.resolved_at,
+        tag: "[reviewgate]",
+        msg: `${yes ? "JA" : "NEE"}: ${p.title}`,
+        tagColor: "#DCEAF7",
+        msgColor: yes ? "#9BE8B8" : "#9FB6D1",
+      });
+    }
+  }
+  const lines = [...traceLines, ...eventLines]
+    .filter((l) => Number.isFinite(l.at))
+    .sort((a, b) => a.at - b.at)
+    .slice(-16)
+    .map((l, i) => ({ ...l, n: i + 1, ts: isToday(l.iso) ? timeOf(l.iso) : shortStamp(l.iso) }));
+
+  // Agents: eerlijke status
   const openPer = new Map<string, number>();
   for (const p of snapshot.pending) openPer.set(p.agent, (openPer.get(p.agent) ?? 0) + 1);
-  const agents = snapshot.agents.map((name) => ({ name, open: openPer.get(name) ?? 0 }));
+  const agents = snapshot.agents
+    .filter((name) => !HIDDEN.has(name))
+    .map((name) => ({ name, planned: PLANNED.has(name), open: openPer.get(name) ?? 0 }))
+    .sort((a, b) => Number(a.planned) - Number(b.planned) || a.name.localeCompare(b.name));
+  const liveCount = agents.filter((a) => !a.planned).length;
 
-  const proposals = [...snapshot.pending, ...snapshot.history].slice(0, 6);
+  // Voorstellen: echte eerst; demo's + oude transcripties apart op te ruimen
+  const isDemo = (p: Proposal) => DEMO_RE.test(p.title);
+  const isOldTranscript = (p: Proposal) => p.agent === "transcribe_agent";
+  const isNoise = (p: Proposal) => isDemo(p) || isOldTranscript(p);
+  const demoCount = snapshot.pending.filter(isDemo).length;
+  const transcriptCount = snapshot.pending.filter((p) => !isDemo(p) && isOldTranscript(p)).length;
+  const noiseIds = snapshot.pending.filter(isNoise).map((p) => p.id);
+  const cleanupConfirm = `${demoCount} demo's en ${transcriptCount} oude transcripties afwijzen? Echte mails en afspraken blijven staan.`;
+  const shownPending: Proposal[] = [
+    ...snapshot.pending.filter((p) => !isNoise(p)),
+    ...snapshot.pending.filter(isNoise),
+  ];
+
+  // Vandaag in gewone taal
+  const scansToday = today["agent.scan"] ?? 0;
+  const decisionsToday = today["gate.decision"] ?? 0;
+  const newToday = [...snapshot.pending, ...snapshot.history].filter((p) => isToday(p.created_at)).length;
+
   const tableRows = traces.slice(0, 5);
 
   // Puro-status: statuskanaal volgt in stap 2, tot die tijd IDLE
@@ -98,7 +197,7 @@ export function OceanBento({ metrics, daily, traces, snapshot }: Props) {
   const beamFast = false;
 
   return (
-    <div className={`${s.root} ${GeistSans.variable} ${mono.variable}`}>
+    <div className={`${s.root} ${GeistSans.variable} ${mono.variable} notranslate`} translate="no" lang="nl">
       <AutoRefresh seconds={15} />
 
       <header className={s.header}>
@@ -182,29 +281,33 @@ export function OceanBento({ metrics, daily, traces, snapshot }: Props) {
           <div className={s.row} style={{ paddingBottom: 8 }}>
             <span className={s.lbl}>agents</span>
             <span className={`${s.mono} ${s.dim} ${s.xs}`}>
-              {connected ? `${agents.length} geregistreerd` : "api offline"}
+              {connected ? `${liveCount} actief · ${agents.length - liveCount} gepland` : "api offline"}
             </span>
           </div>
-          {agents.length === 0 ? (
-            <span className={`${s.mono} ${s.dim}`} style={{ fontSize: 12, paddingTop: 10 }}>
-              {connected ? "geen agents gemeld" : "start ATLAS met python atlas.py"}
-            </span>
-          ) : (
-            agents.map((a) => (
-              <div
-                key={a.name}
-                className={s.rowLine}
-                style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0" }}
-              >
-                <span className={connected ? s.dot : s.ringOff} />
-                <span className={s.mono} style={{ fontSize: 12, flexGrow: 1 }}>
-                  {a.name}
-                </span>
-                <span className={`${s.mono} ${s.dim} ${s.xs}`}>{a.open > 0 ? `${a.open} open` : "actief"}</span>
-              </div>
-            ))
-          )}
-          <div className={s.row} style={{ marginTop: "auto", paddingTop: 10 }}>
+          <div className={s.list}>
+            {agents.length === 0 ? (
+              <span className={`${s.mono} ${s.dim}`} style={{ fontSize: 12, paddingTop: 10 }}>
+                {connected ? "geen agents gemeld" : "start ATLAS met python atlas.py"}
+              </span>
+            ) : (
+              agents.map((a) => (
+                <div
+                  key={a.name}
+                  className={s.rowLine}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0" }}
+                >
+                  <span className={!connected || a.planned ? s.ringOff : s.dot} />
+                  <span className={`${s.mono} ${a.planned ? s.planned : ""}`} style={{ fontSize: 12, flexGrow: 1 }}>
+                    {a.name}
+                  </span>
+                  <span className={`${s.mono} ${s.dim} ${s.xs}`}>
+                    {a.planned ? "gepland" : a.open > 0 ? `${a.open} open` : "actief"}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+          <div className={s.row} style={{ paddingTop: 10 }}>
             <span className={`${s.mono} ${s.dim} ${s.xs}`}>ververst · 15s</span>
             <span className={`${s.mono} ${s.dim} ${s.xs}`}>reviewgate</span>
           </div>
@@ -225,7 +328,7 @@ export function OceanBento({ metrics, daily, traces, snapshot }: Props) {
               bron: logfire · live-koppeling volgt
             </span>
             <span className={`${s.mono} ${s.dim} ${s.xs}`} style={{ marginLeft: "auto" }}>
-              {lines.length} regels
+              {traces.length} sporen
             </span>
           </div>
           <div className={`${s.mono} ${s.termBody}`}>
@@ -239,10 +342,8 @@ export function OceanBento({ metrics, daily, traces, snapshot }: Props) {
                 <div key={l.key} className={s.termLine}>
                   <span className={s.ln}>{l.n}</span>
                   <span className={s.ts}>{l.ts}</span>
-                  <span style={{ color: l.err ? "#E5534B" : l.voice ? "#5B9BD5" : "#6E8BAD", flexShrink: 0 }}>
-                    {l.tag}
-                  </span>
-                  <span className={s.msg} style={{ color: l.err ? "#F2A09B" : l.voice ? "#DCEAF7" : "#A9BFD8" }}>
+                  <span style={{ color: l.tagColor, flexShrink: 0 }}>{l.tag}</span>
+                  <span className={s.msg} style={{ color: l.msgColor }}>
                     {l.msg}
                   </span>
                 </div>
@@ -301,63 +402,74 @@ export function OceanBento({ metrics, daily, traces, snapshot }: Props) {
           </span>
         </section>
 
-        {/* Spans */}
-        <section className={`${s.cell} ${s.pad}`} style={area("10 / 12", "3 / 4")}>
-          <span className={s.lbl}>spans · 7d</span>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <span className={s.big} style={{ fontSize: 36 }}>
-              {nl(metrics.spans.current)}
-            </span>
-            <span className={`${s.mono} ${s.accent} ${s.xs}`}>{pctLabel(metrics.spans.pctChange)}</span>
+        {/* Vandaag in gewone taal */}
+        <section
+          className={s.cell}
+          style={{ ...area("10 / 12", "3 / 4"), padding: "10px 14px", gap: 2, justifyContent: "space-between" }}
+        >
+          <span className={s.lbl}>vandaag</span>
+          <div className={s.todayLine}>
+            <span className={`${s.todayNum}`}>{nl(scansToday)}</span>
+            <span className={`${s.mono} ${s.dim} ${s.xs}`}>keer gescand</span>
           </div>
-          <span className={`${s.mono} ${s.dim} ${s.xs}`}>vorige week {nl(metrics.spans.previous)}</span>
+          <div className={s.todayLine}>
+            <span className={`${s.todayNum}`}>{nl(newToday)}</span>
+            <span className={`${s.mono} ${s.dim} ${s.xs}`}>nieuwe voorstellen</span>
+          </div>
+          <div className={s.todayLine}>
+            <span className={`${s.todayNum}`}>{nl(decisionsToday)}</span>
+            <span className={`${s.mono} ${s.dim} ${s.xs}`}>besluiten genomen</span>
+          </div>
         </section>
 
-        {/* Voorstellen */}
-        <section className={`${s.cell} ${s.padList}`} style={area("10 / 13", "4 / 7")}>
+        {/* Voorstellen met JA/NEE */}
+        <section
+          className={`${s.cell} ${s.padList}`}
+          style={{ ...area("10 / 13", "4 / 7"), padding: "18px 18px 12px" }}
+        >
           <div className={s.row} style={{ paddingBottom: 8 }}>
-            <span className={s.lbl}>voorstellen</span>
-            <a
-              href="/dashboard/proposals"
-              className={`${s.mono} ${s.accent} ${s.xs}`}
-              style={{ textDecoration: "none" }}
-            >
-              {snapshot.pending.length} open →
-            </a>
+            <span className={s.lbl}>voorstellen · {snapshot.pending.length} open</span>
+            <DemoCleanup ids={noiseIds} confirmText={cleanupConfirm} />
           </div>
-          {!connected ? (
-            <span className={`${s.mono} ${s.dim}`} style={{ fontSize: 11.5, paddingTop: 10 }}>
-              {snapshot.error ?? "ATLAS API niet bereikbaar"}
-            </span>
-          ) : proposals.length === 0 ? (
-            <span className={`${s.mono} ${s.dim}`} style={{ fontSize: 11.5, paddingTop: 10 }}>
-              nog geen voorstellen
-            </span>
-          ) : (
-            proposals.map((p) => {
-              const v = verdict(p);
-              return (
+          <div className={s.list}>
+            {!connected ? (
+              <span className={`${s.mono} ${s.dim}`} style={{ fontSize: 11.5, paddingTop: 10 }}>
+                {snapshot.error ?? "ATLAS API niet bereikbaar"}
+              </span>
+            ) : shownPending.length === 0 ? (
+              <span className={`${s.mono} ${s.dim}`} style={{ fontSize: 11.5, paddingTop: 10 }}>
+                niets te beslissen · alles is bij
+              </span>
+            ) : (
+              shownPending.slice(0, 20).map((p) => (
                 <div
                   key={p.id}
                   className={s.rowLine}
-                  style={{ display: "flex", flexDirection: "column", gap: 4, padding: "9px 0" }}
+                  style={{ display: "flex", flexDirection: "column", gap: 6, padding: "10px 0" }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span className={p.status === "pending" ? s.dot : s.ring} />
-                    <span className={`${s.mono} ${s.ellipsis}`} style={{ fontSize: 11.5, flexGrow: 1 }}>
+                    <span className={isNoise(p) ? s.ring : s.dot} />
+                    <span className={`${s.mono} ${s.ellipsis}`} style={{ fontSize: 11.5, flexGrow: 1 }} title={p.title}>
                       {p.title}
                     </span>
                   </div>
                   <div className={s.row} style={{ paddingLeft: 14 }}>
-                    <span className={`${s.mono} ${s.dim} ${s.xs}`}>{p.agent}</span>
-                    <span className={`${s.mono} ${s.xs}`} style={{ color: v.color }}>
-                      {v.text}
+                    <span className={`${s.mono} ${s.dim} ${s.xs} ${s.ellipsis}`} title={p.action_summary}>
+                      {p.agent}
                     </span>
+                    <ProposalActions id={p.id} title={p.title} />
                   </div>
                 </div>
-              );
-            })
-          )}
+              ))
+            )}
+          </div>
+          <a
+            href="/dashboard/proposals"
+            className={`${s.mono} ${s.accent} ${s.xs}`}
+            style={{ textDecoration: "none", paddingTop: 8 }}
+          >
+            alle voorstellen + details →
+          </a>
         </section>
 
         {/* Recente sporen */}

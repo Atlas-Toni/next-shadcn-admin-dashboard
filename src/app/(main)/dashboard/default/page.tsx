@@ -6,6 +6,7 @@ import {
   emptyRecentTraces,
   getAtlasMetrics,
   getRecentTraces,
+  getTodaySpanCounts,
   getTracesPerDay90d,
   type RecentTraceRow,
 } from "@/lib/logfire";
@@ -20,11 +21,15 @@ export default async function Page() {
   let dailyTraces: DailyTracePoint[];
   let recentTraces: RecentTraceRow[];
   const snapshotPromise = getProposalsSnapshot();
+  const todayPromise = getTodaySpanCounts().catch((err) => {
+    console.error("[dashboard] Logfire vandaag-telling mislukt:", err);
+    return {} as Record<string, number>;
+  });
   try {
     [metrics, dailyTraces, recentTraces] = await Promise.all([
       getAtlasMetrics(),
       getTracesPerDay90d(),
-      getRecentTraces(18),
+      getRecentTraces(40),
     ]);
   } catch (err) {
     console.error("[dashboard] Logfire fetch failed:", err);
@@ -32,7 +37,7 @@ export default async function Page() {
     dailyTraces = emptyDailyTraces();
     recentTraces = emptyRecentTraces();
   }
-  const snapshot = await snapshotPromise;
+  const [snapshot, today] = await Promise.all([snapshotPromise, todayPromise]);
 
-  return <OceanBento metrics={metrics} daily={dailyTraces} traces={recentTraces} snapshot={snapshot} />;
+  return <OceanBento metrics={metrics} daily={dailyTraces} traces={recentTraces} today={today} snapshot={snapshot} />;
 }
