@@ -37,7 +37,42 @@ interface LogfireQueryResponse<Row = Record<string, unknown>> {
   data: Row[];
 }
 
+// Cache: 60s per query; gelijktijdige identieke queries delen één verzoek;
+// bij een fout (bv. 429) wordt het laatste goede antwoord teruggegeven.
+// Tijdstempels worden uit de sleutel gefilterd zodat die stabiel blijft.
+const CACHE_TTL_MS = 60_000;
+type CacheEntry = { expires: number; value?: unknown[]; pending?: Promise<unknown[]> };
+const g = globalThis as unknown as { __logfireCache?: Map<string, CacheEntry> };
+g.__logfireCache ??= new Map();
+const queryCache: Map<string, CacheEntry> = g.__logfireCache;
+const cacheKey = (sql: string) =>
+  sql
+    .replace(/\d{4}-\d{2}-\d{2}T[0-9:.]+Z/g, "T")
+    .replace(/\s+/g, " ")
+    .trim();
+
 async function runQuery<Row = Record<string, unknown>>(sql: string, minTimestampISO: string): Promise<Row[]> {
+  const key = cacheKey(sql);
+  const hit = queryCache.get(key);
+  if (hit?.value && hit.expires > Date.now()) return hit.value as Row[];
+  if (hit?.pending) return hit.pending as Promise<Row[]>;
+  const pending = fetchQuery<Row>(sql, minTimestampISO);
+  queryCache.set(key, { expires: hit?.expires ?? 0, value: hit?.value, pending });
+  try {
+    const value = await pending;
+    queryCache.set(key, { expires: Date.now() + CACHE_TTL_MS, value });
+    return value;
+  } catch (err) {
+    if (hit?.value) {
+      queryCache.set(key, { expires: Date.now() + CACHE_TTL_MS, value: hit.value });
+      return hit.value as Row[];
+    }
+    queryCache.delete(key);
+    throw err;
+  }
+}
+
+async function fetchQuery<Row = Record<string, unknown>>(sql: string, minTimestampISO: string): Promise<Row[]> {
   if (!TOKEN) throw new Error("LOGFIRE_READ_TOKEN ontbreekt in env");
   const res = await fetch(`${BASE_URL}/v2/query`, {
     method: "POST",
