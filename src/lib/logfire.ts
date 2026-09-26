@@ -39,7 +39,8 @@ interface LogfireQueryResponse<Row = Record<string, unknown>> {
 
 // Cache: 60s per query; gelijktijdige identieke queries delen één verzoek;
 // bij een fout (bv. 429) wordt het laatste goede antwoord teruggegeven.
-// Tijdstempels worden uit de sleutel gefilterd zodat die stabiel blijft.
+// Tijdstempels worden in de sleutel afgerond op het uur: stabiel binnen een uur,
+// maar verschillende vensters (deze week / vorige week) krijgen een eigen sleutel.
 const CACHE_TTL_MS = 60_000;
 type CacheEntry = { expires: number; value?: unknown[]; pending?: Promise<unknown[]> };
 const g = globalThis as unknown as { __logfireCache?: Map<string, CacheEntry> };
@@ -47,7 +48,7 @@ g.__logfireCache ??= new Map();
 const queryCache: Map<string, CacheEntry> = g.__logfireCache;
 const cacheKey = (sql: string) =>
   sql
-    .replace(/\d{4}-\d{2}-\d{2}T[0-9:.]+Z/g, "T")
+    .replace(/(\d{4}-\d{2}-\d{2}T\d{2})[0-9:.]*Z/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
 
