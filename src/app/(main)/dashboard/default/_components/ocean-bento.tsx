@@ -90,7 +90,18 @@ const shortStamp = (iso: string) =>
     timeZone: TZ,
   });
 
-export function OceanBento({ metrics, daily, traces, today, snapshot }: Props) {
+import type { SystemStatus } from "@/lib/system";
+import type { Usage } from "@/lib/usage";
+
+export function OceanBento({
+  metrics,
+  daily,
+  traces,
+  today,
+  snapshot,
+  system,
+  usage,
+}: Props & { system?: SystemStatus; usage?: Usage }) {
   const connected = snapshot.connected;
 
   // Sporen: laatste 30 dagen als staafjes
@@ -231,9 +242,98 @@ export function OceanBento({ metrics, daily, traces, today, snapshot }: Props) {
           <span className={`${s.mono} ${s.dim}`} style={{ fontSize: 11 }}>
             api :8787 · hud :3001
           </span>
+          {system ? (
+            <span
+              className={s.status}
+              title={
+                system.online ? system.services.map((x) => `${x.name}: ${x.detail}`).join("\n") : "ATLAS API offline"
+              }
+            >
+              {system.online ? (
+                system.services.map((x) => (
+                  <span
+                    key={x.name}
+                    className={s.mono}
+                    style={{
+                      fontSize: 11,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      marginLeft: 8,
+                      color: x.ok ? "#9BE8B8" : "#F2A09B",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: 999,
+                        background: x.ok ? "#10b981" : "#E5534B",
+                        boxShadow: `0 0 6px ${x.ok ? "#10b981" : "#E5534B"}`,
+                      }}
+                    />
+                    {x.name}
+                  </span>
+                ))
+              ) : (
+                <span className={s.mono} style={{ fontSize: 11, color: "#F2A09B" }}>
+                  systeem onbekend
+                </span>
+              )}
+            </span>
+          ) : null}
           <LiveClock className={s.mono} />
         </div>
       </header>
+
+      {usage ? (
+        <div
+          className={s.mono}
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: "6px 20px",
+            fontSize: 11,
+            padding: "0 2px 10px",
+          }}
+        >
+          <span className={s.dim}>gratis limieten</span>
+          {usage.bars
+            .filter((b) => (b.key === "tts-wavenet" || b.key === "tts-standard" ? b.used > 0 : true))
+            .map((b) => {
+              const c = b.pct >= 90 ? "#E5534B" : b.pct >= 70 ? "#f59e0b" : "#10b981";
+              return (
+                <span
+                  key={b.key}
+                  title={`${b.used.toLocaleString("nl-NL")} / ${b.limit.toLocaleString("nl-NL")} ${b.unit} · reset ${b.resets}${b.note ? ` · ${b.note}` : ""}`}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                >
+                  <span className={s.dim}>{b.label.replace(/ \(.*\)$/, "")}</span>
+                  <span
+                    style={{
+                      width: 60,
+                      height: 4,
+                      borderRadius: 999,
+                      background: "rgba(255,255,255,0.1)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "block",
+                        height: "100%",
+                        width: `${Math.min(100, Math.max(b.pct, b.used > 0 ? 2 : 0))}%`,
+                        background: c,
+                      }}
+                    />
+                  </span>
+                  <span>{b.pct}%</span>
+                </span>
+              );
+            })}
+        </div>
+      ) : null}
 
       <div className={s.grid}>
         {/* Sporen 7d */}

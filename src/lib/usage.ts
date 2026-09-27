@@ -30,6 +30,7 @@ const FAMILY_LABEL: Record<string, string> = {
 };
 
 let logfireCache: { month: string; value: number; at: number } | null = null;
+let logfireFailAt = 0;
 
 async function logfireMonthCount(): Promise<number | null> {
   const token = process.env.LOGFIRE_READ_TOKEN ?? "";
@@ -38,6 +39,7 @@ async function logfireMonthCount(): Promise<number | null> {
   if (logfireCache && logfireCache.month === month && Date.now() - logfireCache.at < 10 * 60_000) {
     return logfireCache.value;
   }
+  if (Date.now() - logfireFailAt < 5 * 60_000) return null;
   try {
     const res = await fetch(LOGFIRE_URL, {
       method: "POST",
@@ -49,13 +51,17 @@ async function logfireMonthCount(): Promise<number | null> {
       },
       body: JSON.stringify({ sql: "SELECT COUNT(*) AS n FROM records", min_timestamp: `${month}-01T00:00:00Z` }),
     });
-    if (res.ok === false) return null;
+    if (res.ok === false) {
+      logfireFailAt = Date.now();
+      return null;
+    }
     const data = await res.json();
     const n = Number(data?.data?.[0]?.n);
     if (Number.isFinite(n) === false) return null;
     logfireCache = { month, value: n, at: Date.now() };
     return n;
   } catch {
+    logfireFailAt = Date.now();
     return null;
   }
 }
