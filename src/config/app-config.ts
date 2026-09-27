@@ -7,7 +7,7 @@ export const APP_CONFIG = {
   version: packageJson.version,
   copyright: `© ${currentYear}, ATLAS.`,
   meta: {
-    title: "ATLAS - Modern Next.js Dashboard Starter Template",
+    title: "ATLAS",
     description:
       "ATLAS — Opportunity Engine voor Puro. Lokale/hybride AI-agents scannen kansen, schrijven voorstellen en tonen alles in deze HUD.",
   },
