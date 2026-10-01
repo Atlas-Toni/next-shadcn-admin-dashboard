@@ -419,10 +419,10 @@ export function OceanBento({
               <span />
             </div>
             <span className={s.mono} style={{ fontSize: 12 }}>
-              puro — live ai terminal
+              atlas — live ai terminal
             </span>
             <span className={`${s.mono} ${s.dim}`} style={{ fontSize: 11 }}>
-              bron: logfire + puro live
+              bron: logfire + atlas live
             </span>
             <span className={`${s.mono} ${s.dim} ${s.xs}`} style={{ marginLeft: "auto" }}>
               {traces.length} sporen
@@ -449,7 +449,7 @@ export function OceanBento({
             <PuroLiveLines />
             <div className={s.termLine}>
               <span className={s.ln}>›</span>
-              <span className={s.accent}>puro@atlas</span>
+              <span className={s.accent}>toni@atlas</span>
               <span className={s.dim}>~</span>
               <span className={s.cursor} />
             </div>

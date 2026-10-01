@@ -78,8 +78,8 @@ export function PuroStatusCard() {
       style={{ gridColumn: "10 / 13", gridRow: "1 / 2" }}
     >
       <div className={s.row}>
-        <span className={s.lbl}>puro · status</span>
-        <span className={`${s.mono} ${s.dim} ${s.xs}`}>hey_puro · 0.20</span>
+        <span className={s.lbl}>atlas · status</span>
+        <span className={`${s.mono} ${s.dim} ${s.xs}`}>hey_atlas · 0.27</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <span className={p.state === "OFFLINE" ? s.ringOff : s.dot} />
@@ -113,7 +113,7 @@ export function PuroLiveLines({ max = 8 }: { max?: number }) {
         <div key={`p-${e.ts}`} className={s.termLine}>
           <span className={s.ln}>·</span>
           <span className={s.ts}>{fmtTime(e.ts)}</span>
-          <span style={{ color: "#5B9BD5", flexShrink: 0 }}>[puro]</span>
+          <span style={{ color: "#5B9BD5", flexShrink: 0 }}>[atlas]</span>
           <span className={s.msg} style={{ color: e.kind === "voice" ? "#DCEAF7" : "#A9BFD8" }}>
             {e.text}
           </span>
